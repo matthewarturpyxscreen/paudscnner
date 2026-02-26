@@ -76,7 +76,7 @@ st.title("🎮 QR ROOM SCANNER ULTRA")
 # ===================================
 # TAMPILKAN QR UNTUK HP
 # ===================================
-base_url = st.experimental_get_url().split("?")[0]
+base_url = str(st.context.url).split("?")[0]
 scanner_link = f"{base_url}?scanner={room}"
 
 qr = qrcode.make(scanner_link)
