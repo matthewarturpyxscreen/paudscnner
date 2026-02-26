@@ -23,13 +23,20 @@ if not room:
     st.query_params["room"] = room
 
 scanner_mode = query.get("scanner")
+scan_param = query.get("scan")
 
 # ======================================
-# 📱 HP MODE — TAKE PHOTO CACHE OCR
+# 📱 MODE HP — TAKE PHOTO + AUTO REDIRECT
 # ======================================
 if scanner_mode:
 
-    st.title("📸 PRIORITY TAKE PHOTO CACHE SCANNER")
+    st.title("📸 PRIORITY TAKE PHOTO SCANNER")
+
+    # ambil base url
+    try:
+        base_url = str(st.context.url).split("?")[0]
+    except:
+        base_url = ""
 
     html = """
 <style>
@@ -83,16 +90,10 @@ document.getElementById("snap").onclick=async function(){
  const w=video.videoWidth;
  const h=video.videoHeight;
 
- // =====================
- // STEP 1: SIMPAN FOTO FULL
- // =====================
  photo.width=w;
  photo.height=h;
  ctxPhoto.drawImage(video,0,0,w,h);
 
- // =====================
- // STEP 2: CROP AREA PRIORITY
- // =====================
  const cropX=w*0.15;
  const cropY=h*0.45;
  const cropW=w*0.7;
@@ -103,18 +104,18 @@ document.getElementById("snap").onclick=async function(){
 
  ctxCrop.drawImage(photo,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
 
- status.innerHTML="🔎 Membaca angka dari foto...";
+ status.innerHTML="🔎 Membaca angka...";
 
- // =====================
- // STEP 3: OCR DARI CACHE FOTO
- // =====================
  const result=await Tesseract.recognize(crop,'eng');
 
  let angka=(result.data.text||"").replace(/[^0-9]/g,'');
 
  if(angka.length>0){
-   localStorage.setItem("ROOM___ROOM__",angka);
-   status.innerHTML="📡 Terkirim: "+angka;
+
+   status.innerHTML="📡 Mengirim ke laptop...";
+
+   // AUTO REDIRECT KE LAPTOP
+   window.location.href="__BASE__?room=__ROOM__&scan="+angka;
  }
  else{
    status.innerHTML="⚠️ Angka tidak terbaca";
@@ -124,8 +125,10 @@ document.getElementById("snap").onclick=async function(){
 </script>
 """
 
-    html = html.replace("__ROOM__",room)
-    components.html(html,height=700)
+    html = html.replace("__ROOM__", room)
+    html = html.replace("__BASE__", base_url)
+
+    components.html(html, height=700)
     st.stop()
 
 # ======================================
@@ -147,36 +150,22 @@ qr.save(buf)
 st.image(buf.getvalue(),width=200)
 st.code(scanner_link)
 
-listener="""
-<script>
-setInterval(function(){
- const val=localStorage.getItem("ROOM___ROOM__");
- if(val){
-  window.parent.postMessage({
-   type:"streamlit:setComponentValue",
-   value:val
-  },"*");
- }
-},500);
-</script>
-"""
-
-listener=listener.replace("__ROOM__",room)
-scan_value=components.html(listener,height=0)
-
 manual=st.text_input("✏️ Input NPSN Manual")
 
 npsn=None
-if isinstance(scan_value,str) and scan_value.strip().isdigit():
-    npsn=scan_value.strip()
-    st.success("📡 Dari HP: "+npsn)
+
+# AUTO DARI HP
+if scan_param:
+    npsn=str(scan_param)
+    st.success(f"📡 Dari HP: {npsn}")
+
 elif manual:
     npsn=manual.strip()
 
 sheet_url=st.text_input("Link Spreadsheet")
 
 # ======================================
-# PRIORITY LOADER (ANTI NaN JSON ERROR)
+# PRIORITY LOADER
 # ======================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
@@ -194,7 +183,6 @@ def load_priority_data(url):
         raw=pd.read_excel(excel,sheet_name=sheet_name,header=None)
 
         header_row=None
-
         for i in range(min(20,len(raw))):
             vals=raw.iloc[i].fillna("").astype(str).str.lower()
             if "npsn" in " ".join(vals):
@@ -202,15 +190,7 @@ def load_priority_data(url):
                 break
 
         df=raw.iloc[header_row+1:].copy()
-        df.columns=raw.iloc[header_row]
-
-        # 🔥 FIX ERROR JSON NaN
-        df.columns = (
-            pd.Series(df.columns)
-            .fillna("")
-            .astype(str)
-            .str.lower()
-        )
+        df.columns=pd.Series(raw.iloc[header_row]).fillna("").astype(str).str.lower()
 
         df=df.loc[:,~df.columns.duplicated()]
         df["source_sheet"]=sheet_name
@@ -255,7 +235,7 @@ if sheet_url and npsn:
             hasil=temp
             source="priority"
 
-    if hasil is None and "backup" in data and "npsn" in data["backup"].columns:
+    if hasil is None and "backup" in data:
 
         temp=data["backup"][
             data["backup"]["npsn"]
