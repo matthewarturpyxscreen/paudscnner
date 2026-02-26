@@ -130,20 +130,21 @@ st.markdown("### 📱 Scan QR pakai HP untuk jadi scanner")
 st.image(buf.getvalue(),width=200)
 st.code(scanner_link)
 
-# LISTENER DATA DARI HP
-listener=f"""
+listener = """
 <script>
 setInterval(function(){
- const val=localStorage.getItem("ROOM_{room}");
+ const val=localStorage.getItem("ROOM___ROOM__");
  if(val){
-  window.parent.postMessage({{
+  window.parent.postMessage({
    type:"streamlit:setComponentValue",
    value:val
-  }},"*");
+  },"*");
  }
 },500);
 </script>
 """
+
+listener = listener.replace("__ROOM__",room)
 
 scan_value=components.html(listener,height=0)
 
@@ -174,36 +175,19 @@ def load_priority_data(url):
 
     def read_sheet(sheet_name):
 
-        raw=pd.read_excel(
-            excel,
-            sheet_name=sheet_name,
-            header=None,
-            engine="openpyxl"
-        )
+        raw=pd.read_excel(excel,sheet_name=sheet_name,header=None,engine="openpyxl")
 
         header_row=None
 
         for i in range(min(15,len(raw))):
-            row_values = (
-                raw.iloc[i]
-                .fillna("")
-                .astype(str)
-                .str.lower()
-                .tolist()
-            )
-
+            row_values = raw.iloc[i].fillna("").astype(str).str.lower().tolist()
             if any("npsn" in v for v in row_values):
                 header_row=i
                 break
 
         if header_row is not None:
             df=raw.iloc[header_row+1:].copy()
-            df.columns=(
-                raw.iloc[header_row]
-                .astype(str)
-                .str.lower()
-                .str.strip()
-            )
+            df.columns=raw.iloc[header_row].astype(str).str.lower().str.strip()
         else:
             df=raw.copy()
             df.columns=[f"kolom_{i}" for i in range(len(df.columns))]
@@ -224,7 +208,7 @@ def load_priority_data(url):
     return data
 
 # ===============================
-# SEARCH LOGIC
+# SEARCH
 # ===============================
 if sheet_url and npsn:
 
@@ -236,7 +220,6 @@ if sheet_url and npsn:
     hasil=None
     source=None
 
-    # PRIORITY SEARCH
     if "priority" in data and "npsn" in data["priority"].columns:
 
         temp=data["priority"][
@@ -252,7 +235,6 @@ if sheet_url and npsn:
             hasil=temp
             source="priority"
 
-    # BACKUP SEARCH
     if hasil is None and "backup" in data and "npsn" in data["backup"].columns:
 
         temp=data["backup"][
@@ -268,7 +250,6 @@ if sheet_url and npsn:
             hasil=temp
             source="backup"
 
-    # RESULT
     if hasil is not None:
 
         if source=="priority":
@@ -281,4 +262,3 @@ if sheet_url and npsn:
 
     else:
         st.warning("Data tidak ditemukan")
-        
