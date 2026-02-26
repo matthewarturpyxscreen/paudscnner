@@ -25,72 +25,105 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# 📱 MODE HP — CAMERA OCR (FIX iPHONE)
+# 📱 MODE HP — CAMERA OCR + FRAME + ZOOM
 # ===================================
 if scanner_mode:
 
-    st.title("📸 HP CAMERA MODE — OCR NPSN")
+    st.title("📸 HP CAMERA OCR SCANNER")
 
     html = f"""
-    <video id="video" autoplay playsinline style="width:100%;border-radius:12px"></video>
-    <button id="snap" style="width:100%;padding:15px;margin-top:10px;font-size:18px">
-    📸 TAKE PHOTO & AUTO SCAN
-    </button>
-    <div id="status" style="margin-top:10px;color:green"></div>
-    <canvas id="canvas" style="display:none;"></canvas>
+<style>
+.frame {{
+position:absolute;
+border:3px solid red;
+width:70%;
+height:80px;
+left:15%;
+top:40%;
+border-radius:10px;
+}}
+</style>
 
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<div style="position:relative">
+<video id="video" autoplay playsinline style="width:100%;border-radius:12px"></video>
+<div class="frame"></div>
+</div>
 
-    <script>
-    const video = document.getElementById('video');
-    const statusText = document.getElementById('status');
+<input type="range" id="zoomSlider" min="1" max="3" step="0.1" value="1" style="width:100%">
 
-    navigator.mediaDevices.getUserMedia({{
-        video: {{ facingMode:"environment" }}
-    }})
-    .then(stream => {{
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {{
-            statusText.innerHTML = "✅ Kamera siap";
-        }};
-    }})
-    .catch(err => {{
-        statusText.innerHTML = "❌ Kamera gagal: " + err;
-    }});
+<button id="snap" style="width:100%;padding:15px;margin-top:10px;font-size:18px">
+📸 TAKE PHOTO & AUTO SCAN
+</button>
 
-    document.getElementById('snap').onclick = async function() {{
+<div id="status" style="margin-top:10px;color:green"></div>
 
-        if(video.videoWidth === 0){{
-            statusText.innerHTML = "⏳ Tunggu kamera siap...";
-            return;
-        }}
+<canvas id="canvas" style="display:none;"></canvas>
 
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+<script>
 
-        ctx.drawImage(video,0,0);
+const video = document.getElementById('video');
+const statusText = document.getElementById('status');
+let track;
 
-        statusText.innerHTML = "🔎 Membaca angka...";
+navigator.mediaDevices.getUserMedia({{
+    video: {{ facingMode:"environment" }}
+}})
+.then(stream => {{
+    video.srcObject = stream;
+    track = stream.getVideoTracks()[0];
+    statusText.innerHTML = "✅ Kamera siap";
+}})
+.catch(err => {{
+    statusText.innerHTML = "❌ Kamera gagal: " + err;
+}});
 
-        const result = await Tesseract.recognize(canvas,'eng');
-
-        let text = result.data.text || "";
-        let angka = text.replace(/[^0-9]/g,'');
-
-        if(angka.length>0){{
-            statusText.innerHTML = "✅ Angka terbaca: " + angka;
-            localStorage.setItem("ROOM_{room}", angka);
-        }}else{{
-            statusText.innerHTML = "⚠️ Angka tidak terbaca";
+// ZOOM CONTROL
+document.getElementById('zoomSlider').oninput = function() {{
+    if(track) {{
+        const capabilities = track.getCapabilities();
+        if(capabilities.zoom) {{
+            track.applyConstraints({{ advanced: [{{ zoom: this.value }}] }});
         }}
     }}
-    </script>
-    """
+}}
 
-    components.html(html, height=650)
+document.getElementById('snap').onclick = async function() {{
+
+    if(video.videoWidth === 0){{
+        statusText.innerHTML = "⏳ Tunggu kamera siap...";
+        return;
+    }}
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    ctx.drawImage(video,0,0);
+
+    statusText.innerHTML = "🔎 Membaca angka...";
+
+    const result = await Tesseract.recognize(canvas,'eng');
+
+    let text = result.data.text || "";
+    let angka = text.replace(/[^0-9]/g,'');
+
+    if(angka.length>0){{
+        localStorage.setItem("ROOM_{room}", angka);
+        statusText.innerHTML = "✅ Angka: "+angka+" (mengirim...)";
+        setTimeout(()=>{{ window.location.reload(); }},500);
+    }}else{{
+        statusText.innerHTML = "⚠️ Angka tidak terbaca";
+    }}
+}}
+
+</script>
+"""
+
+    components.html(html, height=750)
     st.stop()
 
 # ===================================
@@ -98,7 +131,6 @@ if scanner_mode:
 # ===================================
 st.title("🎮 CAMERA OCR ROOM SCANNER")
 
-# FIX API URL BARU
 try:
     base_url = str(st.context.url).split("?")[0]
 except:
@@ -110,13 +142,9 @@ qr = qrcode.make(scanner_link)
 buf = io.BytesIO()
 qr.save(buf)
 
-st.markdown("### 📱 Scan QR ini pakai HP")
 st.image(buf.getvalue(), width=220)
 st.code(scanner_link)
 
-# ===================================
-# LISTENER REALTIME
-# ===================================
 listener_html = f"""
 <script>
 setInterval(function(){{
@@ -139,14 +167,14 @@ npsn=None
 
 if scan_value:
     npsn=str(scan_value)
-    st.success(f"📡 Angka dari HP: {npsn}")
+    st.success(f"📡 NPSN dari HP: {npsn}")
 elif npsn_manual:
     npsn=npsn_manual
 
 sheet_url = st.text_input("Masukkan Link Spreadsheet")
 
 # ===================================
-# PRIORITY LOADER (FIX OPENPYXL)
+# PRIORITY LOADER (FIX ERROR)
 # ===================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
@@ -167,7 +195,7 @@ def load_priority_data(url):
 
         header_row=None
         for i in range(min(10,len(raw))):
-            row_values=raw.iloc[i].astype(str).str.lower().tolist()
+            row_values = raw.iloc[i].fillna("").astype(str).str.lower().tolist()
             if any("npsn" in v for v in row_values):
                 header_row=i
                 break
@@ -217,14 +245,6 @@ if sheet_url and npsn:
             source="backup"
 
     if hasil is not None:
-
-        if source=="priority":
-            st.success("🟢 DATA UTAMA")
-
-        if source=="backup":
-            st.info("🔵 DATA BACKUP")
-
         st.dataframe(hasil,use_container_width=True,hide_index=True)
-
     else:
         st.warning("Data tidak ditemukan")
