@@ -6,9 +6,6 @@ import io
 import random
 import string
 
-# ===================================
-# CONFIG
-# ===================================
 st.set_page_config(layout="wide")
 
 # ===================================
@@ -28,23 +25,26 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# 📱 MODE HP — TAKE PHOTO OCR ANGKA
+# 📱 MODE HP — AUTO OPEN CAMERA + OCR
 # ===================================
 if scanner_mode:
 
-    st.title("📸 MODE HP — FOTO & AUTO DETEKSI ANGKA")
+    st.title("📸 Scanner HP Aktif")
 
     camera_html = f"""
     <video id="video" autoplay playsinline style="width:100%"></video>
-    <button onclick="takePhoto()">📸 Ambil Foto</button>
     <canvas id="canvas" style="display:none"></canvas>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 
     const video = document.getElementById('video');
 
-    navigator.mediaDevices.getUserMedia({{video:{{facingMode:"environment"}}}})
-    .then(stream=>{{ video.srcObject = stream; }});
+    // 🔥 AUTO OPEN CAMERA
+    navigator.mediaDevices.getUserMedia({{
+        video:{{facingMode:"environment"}}
+    }}).then(stream=>{{
+        video.srcObject = stream;
+    }});
 
     function kirim(val){{
         const angka = val.replace(/[^0-9]/g,'');
@@ -53,7 +53,8 @@ if scanner_mode:
         }}
     }}
 
-    function takePhoto(){{
+    // 🔥 AUTO TAKE PHOTO SETIAP 2 DETIK
+    setInterval(function(){{
         const canvas = document.getElementById('canvas');
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -66,7 +67,7 @@ if scanner_mode:
         }})=>{{
             kirim(text);
         }});
-    }}
+    }},2000);
     </script>
     """
 
@@ -76,10 +77,10 @@ if scanner_mode:
 # ===================================
 # 💻 MODE LAPTOP
 # ===================================
-st.title("🎮 TAKE PHOTO NPSN SCANNER ULTRA")
+st.title("🎮 AUTO CAMERA NPSN OCR SCANNER")
 
 # ===================================
-# QR UNTUK HP
+# QR CODE UNTUK HP
 # ===================================
 try:
     base_url = str(st.context.url).split("?")[0]
@@ -109,14 +110,14 @@ setInterval(function(){{
          value:val
       }},"*");
    }}
-}},700);
+}},500);
 </script>
 """
 
 scan_value = components.html(listener_html, height=0)
 
 # ===================================
-# INPUT MANUAL LAPTOP
+# INPUT MANUAL
 # ===================================
 npsn_manual = st.text_input("✏️ Ketik NPSN Manual")
 
@@ -124,7 +125,7 @@ npsn = None
 
 if scan_value:
     npsn = str(scan_value)
-    st.success(f"📡 NPSN dari HP (OCR): {npsn}")
+    st.success(f"📡 NPSN dari HP: {npsn}")
 
 elif npsn_manual:
     npsn = npsn_manual
