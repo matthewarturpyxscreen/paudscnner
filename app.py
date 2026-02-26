@@ -25,15 +25,15 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# 📱 HP MODE — INDUSTRIAL OCR ENGINE V3
+# 📱 HP MODE — INDUSTRIAL OCR ENGINE V3 (FIX FSTRING)
 # ===================================
 if scanner_mode:
 
     st.title("🚀 INDUSTRIAL OCR ENGINE V3")
 
-    html = f"""
+    html = """
 <style>
-.frame {{
+.frame {
 position:absolute;
 border:3px solid red;
 width:70%;
@@ -41,7 +41,7 @@ height:120px;
 left:15%;
 top:45%;
 border-radius:10px;
-}}
+}
 </style>
 
 <div style="position:relative">
@@ -62,35 +62,33 @@ const statusText = document.getElementById('status');
 let track;
 let lastScan="";
 
-navigator.mediaDevices.getUserMedia({{
-    video: {{ facingMode:"environment" }}
-}})
-.then(stream => {{
+navigator.mediaDevices.getUserMedia({
+    video: { facingMode:"environment" }
+})
+.then(stream => {
     video.srcObject = stream;
     track = stream.getVideoTracks()[0];
     statusText.innerHTML="✅ Kamera aktif — realtime scan";
-}});
+});
 
-// ZOOM CONTROL
-document.getElementById('zoomSlider').oninput=function(){{
-    if(track){{
+document.getElementById('zoomSlider').oninput=function(){
+    if(track){
         const cap=track.getCapabilities();
-        if(cap.zoom){{
-            track.applyConstraints({{advanced:[{{zoom:this.value}}]}});
-        }}
-    }}
-}}
+        if(cap.zoom){
+            track.applyConstraints({advanced:[{zoom:this.value}]});
+        }
+    }
+}
 
 const canvas=document.getElementById('canvas');
 const ctx=canvas.getContext('2d');
 
-// INDUSTRIAL FAST OCR (numeric detection)
-function fastScan(){{
+function fastScan(){
 
-    if(video.videoWidth===0){{
+    if(video.videoWidth===0){
         requestAnimationFrame(fastScan);
         return;
-    }}
+    }
 
     const w=video.videoWidth;
     const h=video.videoHeight;
@@ -107,24 +105,21 @@ function fastScan(){{
 
     const imgData = ctx.getImageData(0,0,cropW,cropH);
 
-    // Simple numeric detection heuristic
-    let brightCount=0;
-    for(let i=0;i<imgData.data.length;i+=4){{
+    let darkCount=0;
+    for(let i=0;i<imgData.data.length;i+=4){
         const avg=(imgData.data[i]+imgData.data[i+1]+imgData.data[i+2])/3;
-        if(avg<120) brightCount++;
-    }}
+        if(avg<120) darkCount++;
+    }
 
-    // Jika kontras cukup → kirim trigger
-    if(brightCount>5000){{
-        // trigger dummy angka (biar cepat)
+    if(darkCount>5000){
         let angka="SCAN"+Date.now().toString().slice(-6);
 
-        if(angka!==lastScan){{
+        if(angka!==lastScan){
             lastScan=angka;
             statusText.innerHTML="📡 Scan trigger aktif";
-            localStorage.setItem("ROOM_{room}", angka);
-        }}
-    }}
+            localStorage.setItem("ROOM___ROOM__", angka);
+        }
+    }
 
     requestAnimationFrame(fastScan);
 }
@@ -133,6 +128,8 @@ requestAnimationFrame(fastScan);
 
 </script>
 """
+
+    html = html.replace("__ROOM__", room)
 
     components.html(html, height=750)
     st.stop()
@@ -185,9 +182,6 @@ elif npsn_manual:
 
 sheet_url = st.text_input("Masukkan Link Spreadsheet")
 
-# ===================================
-# PRIORITY LOADER FIX
-# ===================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
 
@@ -231,9 +225,6 @@ def load_priority_data(url):
 
     return data
 
-# ===================================
-# AUTO SEARCH
-# ===================================
 if sheet_url and npsn:
 
     if "priority_data" not in st.session_state:
