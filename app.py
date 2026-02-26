@@ -6,9 +6,6 @@ import io
 import random
 import string
 
-# ===================================
-# CONFIG
-# ===================================
 st.set_page_config(layout="wide")
 
 # ===================================
@@ -28,31 +25,45 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# 📱 MODE HP — CAMERA OCR
+# 📱 MODE HP — CAMERA OCR (FIX iPHONE)
 # ===================================
 if scanner_mode:
 
-    st.title("📸 HP CAMERA MODE — AUTO OCR ANGKA NPSN")
+    st.title("📸 HP CAMERA MODE — OCR NPSN")
 
     html = f"""
     <video id="video" autoplay playsinline style="width:100%;border-radius:12px"></video>
     <button id="snap" style="width:100%;padding:15px;margin-top:10px;font-size:18px">
-    📸 TAKE PHOTO & SCAN ANGKA
+    📸 TAKE PHOTO & AUTO SCAN
     </button>
-
+    <div id="status" style="margin-top:10px;color:green"></div>
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <script>
     const video = document.getElementById('video');
+    const statusText = document.getElementById('status');
 
-    navigator.mediaDevices.getUserMedia({{ video: {{ facingMode:"environment" }} }})
+    navigator.mediaDevices.getUserMedia({{
+        video: {{ facingMode:"environment" }}
+    }})
     .then(stream => {{
         video.srcObject = stream;
+        video.onloadedmetadata = () => {{
+            statusText.innerHTML = "✅ Kamera siap";
+        }};
+    }})
+    .catch(err => {{
+        statusText.innerHTML = "❌ Kamera gagal: " + err;
     }});
 
     document.getElementById('snap').onclick = async function() {{
+
+        if(video.videoWidth === 0){{
+            statusText.innerHTML = "⏳ Tunggu kamera siap...";
+            return;
+        }}
 
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -62,23 +73,24 @@ if scanner_mode:
 
         ctx.drawImage(video,0,0);
 
-        const imgData = canvas.toDataURL("image/png");
+        statusText.innerHTML = "🔎 Membaca angka...";
 
-        const result = await Tesseract.recognize(imgData,'eng');
+        const result = await Tesseract.recognize(canvas,'eng');
 
         let text = result.data.text || "";
-
-        // ambil angka saja
         let angka = text.replace(/[^0-9]/g,'');
 
         if(angka.length>0){{
+            statusText.innerHTML = "✅ Angka terbaca: " + angka;
             localStorage.setItem("ROOM_{room}", angka);
+        }}else{{
+            statusText.innerHTML = "⚠️ Angka tidak terbaca";
         }}
     }}
     </script>
     """
 
-    components.html(html, height=600)
+    components.html(html, height=650)
     st.stop()
 
 # ===================================
@@ -86,7 +98,7 @@ if scanner_mode:
 # ===================================
 st.title("🎮 CAMERA OCR ROOM SCANNER")
 
-# URL BASE (FIX STREAMLIT API BARU)
+# FIX API URL BARU
 try:
     base_url = str(st.context.url).split("?")[0]
 except:
@@ -94,14 +106,11 @@ except:
 
 scanner_link = f"{base_url}?scanner={room}"
 
-# ===================================
-# QR CODE UNTUK HP
-# ===================================
 qr = qrcode.make(scanner_link)
 buf = io.BytesIO()
 qr.save(buf)
 
-st.markdown("### 📱 Scan QR ini pakai HP untuk jadi kamera scanner")
+st.markdown("### 📱 Scan QR ini pakai HP")
 st.image(buf.getvalue(), width=220)
 st.code(scanner_link)
 
@@ -124,32 +133,28 @@ setInterval(function(){{
 
 scan_value = components.html(listener_html, height=0)
 
-# ===================================
-# INPUT MANUAL LAPTOP
-# ===================================
 npsn_manual = st.text_input("✏️ Ketik NPSN Manual")
 
-npsn = None
+npsn=None
 
 if scan_value:
-    npsn = str(scan_value)
-    st.success(f"📡 Angka dari Kamera HP: {npsn}")
-
+    npsn=str(scan_value)
+    st.success(f"📡 Angka dari HP: {npsn}")
 elif npsn_manual:
-    npsn = npsn_manual
+    npsn=npsn_manual
 
-# ===================================
-# PRIORITY SEARCH ENGINE
-# ===================================
 sheet_url = st.text_input("Masukkan Link Spreadsheet")
 
+# ===================================
+# PRIORITY LOADER (FIX OPENPYXL)
+# ===================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
 
     if "docs.google.com" in url:
         url = url.replace("/edit?usp=sharing","/export?format=xlsx")
 
-    excel = pd.ExcelFile(url)
+    excel = pd.ExcelFile(url, engine="openpyxl")
 
     PRIORITY_SHEET="PAKE DATA INI UDAH KE UPDATE!!!"
     BACKUP_SHEET="18/2/2026"
@@ -157,7 +162,8 @@ def load_priority_data(url):
     data={}
 
     def read_sheet(sheet_name):
-        raw=pd.read_excel(excel,sheet_name=sheet_name,header=None)
+
+        raw=pd.read_excel(excel,sheet_name=sheet_name,header=None,engine="openpyxl")
 
         header_row=None
         for i in range(min(10,len(raw))):
@@ -213,10 +219,10 @@ if sheet_url and npsn:
     if hasil is not None:
 
         if source=="priority":
-            st.success("🟢 DATA UTAMA TERDETEKSI")
+            st.success("🟢 DATA UTAMA")
 
         if source=="backup":
-            st.info("🔵 DATA BACKUP TERDETEKSI")
+            st.info("🔵 DATA BACKUP")
 
         st.dataframe(hasil,use_container_width=True,hide_index=True)
 
