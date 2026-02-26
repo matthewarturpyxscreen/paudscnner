@@ -4,12 +4,12 @@ import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
 
-st.title("🎓 NPSN Scanner — Laptop Mode (Super Stabil)")
+st.title("📱 NPSN Scanner — HP Mode")
 
-# =========================
-# CAMERA SCANNER DI LAPTOP
-# =========================
-html = """
+query=st.query_params
+scan_param=query.get("scan")
+
+html="""
 <style>
 .frame{
 position:absolute;
@@ -27,41 +27,38 @@ border-radius:12px;
 <div class="frame"></div>
 </div>
 
-<input id="hiddenInput" />
+<button id="snap">Ambil Angka</button>
 
 <script>
 const video=document.getElementById("video");
 
 navigator.mediaDevices.getUserMedia({
- video:true
+ video:{facingMode:"environment"}
 }).then(stream=>{
  video.srcObject=stream;
 });
 
-document.getElementById("hiddenInput").addEventListener("change",function(){
- window.parent.postMessage({
-   type:"streamlit:setComponentValue",
-   value:this.value
- },"*");
-});
+document.getElementById("snap").onclick=function(){
+ let angka=prompt("Masukkan angka NPSN:");
+ if(angka){
+  window.location.search="?scan="+angka;
+ }
+}
 </script>
 """
 
-scan_value = components.html(html, height=420)
+components.html(html,height=500)
 
-manual = st.text_input("Input NPSN")
+manual=st.text_input("Input Manual")
 
 npsn=None
-if isinstance(scan_value,str):
-    npsn=scan_value
+if scan_param:
+    npsn=scan_param
 elif manual:
     npsn=manual
 
-sheet_url = st.text_input("Link Spreadsheet")
+sheet_url=st.text_input("Link Spreadsheet")
 
-# =========================
-# DATA LOADER
-# =========================
 @st.cache_data
 def load_data(url):
 
@@ -95,9 +92,6 @@ def load_data(url):
 
     return data
 
-# =========================
-# SEARCH
-# =========================
 if sheet_url and npsn:
 
     data=load_data(sheet_url)
