@@ -25,59 +25,113 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# 📱 MODE HP — AUTO OPEN CAMERA + OCR
+# 📱 MODE HP — CAMERA GUIDE PRO
 # ===================================
 if scanner_mode:
 
-    st.title("📸 Scanner HP Aktif")
+    st.title("📸 Scanner Kamera Aktif")
 
     camera_html = f"""
-    <video id="video" autoplay playsinline style="width:100%"></video>
-    <canvas id="canvas" style="display:none"></canvas>
+    <style>
+    body {{ margin:0; background:black; }}
+    #wrap {{
+        position:relative;
+        width:100%;
+        height:100vh;
+        overflow:hidden;
+    }}
+    #video {{
+        width:100%;
+        height:100vh;
+        object-fit:cover;
+    }}
+
+    /* 🔥 GUIDE FRAME */
+    #guide {{
+        position:absolute;
+        bottom:15%;
+        left:50%;
+        transform:translateX(-50%);
+        width:80%;
+        height:80px;
+        border:3px solid #22c55e;
+        border-radius:12px;
+        box-shadow:0 0 25px #22c55e;
+        pointer-events:none;
+    }}
+
+    #startBtn {{
+        position:absolute;
+        top:20px;
+        left:50%;
+        transform:translateX(-50%);
+        padding:14px 20px;
+        font-size:20px;
+        background:#16a34a;
+        color:white;
+        border:none;
+        border-radius:12px;
+        z-index:999;
+    }}
+    </style>
+
+    <div id="wrap">
+        <button id="startBtn">📸 AKTIFKAN KAMERA</button>
+        <video id="video" autoplay playsinline></video>
+        <div id="guide"></div>
+        <canvas id="canvas" style="display:none"></canvas>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 
+    const btn = document.getElementById('startBtn');
     const video = document.getElementById('video');
 
-    // 🔥 AUTO OPEN CAMERA
-    navigator.mediaDevices.getUserMedia({{
-        video:{{facingMode:"environment"}}
-    }}).then(stream=>{{
-        video.srcObject = stream;
-    }});
-
-    function kirim(val){{
-        const angka = val.replace(/[^0-9]/g,'');
-        if(angka.length>0){{
-            localStorage.setItem("ROOM_{room}", angka);
-        }}
-    }}
-
-    // 🔥 AUTO TAKE PHOTO SETIAP 2 DETIK
-    setInterval(function(){{
-        const canvas = document.getElementById('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video,0,0);
-
-        Tesseract.recognize(canvas,'eng').then(({{
-            data:{{text}}
-        }})=>{{
-            kirim(text);
+    btn.onclick = async function(){{
+        const stream = await navigator.mediaDevices.getUserMedia({{
+            video:{{facingMode:"environment"}}
         }});
-    }},2000);
+        video.srcObject = stream;
+        btn.style.display="none";
+
+        // 🔥 OCR LOOP
+        setInterval(function(){{
+            const canvas = document.getElementById('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+
+            // 🔥 Crop area bawah (angka NPSN)
+            const h = video.videoHeight;
+            const w = video.videoWidth;
+
+            const cropY = h * 0.70;
+            const cropH = h * 0.18;
+
+            ctx.drawImage(video,0,cropY,w,cropH,0,0,w,cropH);
+
+            Tesseract.recognize(canvas,'eng').then(({{
+                data:{{text}}
+            }})=>{{
+                const angka = text.replace(/[^0-9]/g,'');
+                if(angka.length>5){{
+                    localStorage.setItem("ROOM_{room}", angka);
+                }}
+            }});
+
+        }},1500);
+    }}
     </script>
     """
 
-    components.html(camera_html, height=500)
+    components.html(camera_html, height=600)
     st.stop()
 
 # ===================================
 # 💻 MODE LAPTOP
 # ===================================
-st.title("🎮 AUTO CAMERA NPSN OCR SCANNER")
+st.title("🎮 CAMERA GUIDE PRO — OCR NPSN")
 
 # ===================================
 # QR CODE UNTUK HP
@@ -146,7 +200,7 @@ def load_priority_data(url):
     PRIORITY_SHEET="PAKE DATA INI UDAH KE UPDATE!!!"
     BACKUP_SHEET="18/2/2026"
 
-    data={}
+    data={{}}
 
     def read_sheet(sheet_name):
         raw=pd.read_excel(excel,sheet_name=sheet_name,header=None)
@@ -163,7 +217,7 @@ def load_priority_data(url):
             df.columns=raw.iloc[header_row].astype(str).str.lower().str.strip()
         else:
             df=raw.copy()
-            df.columns=[f"kolom_{i}" for i in range(len(df.columns))]
+            df.columns=[f"kolom_{{i}}" for i in range(len(df.columns))]
 
         df["source_sheet"]=sheet_name
         df=df.loc[:,~df.columns.duplicated()]
