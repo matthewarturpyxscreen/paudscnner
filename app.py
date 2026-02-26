@@ -8,6 +8,9 @@ import string
 
 st.set_page_config(layout="wide")
 
+# ======================================
+# ROOM SYSTEM
+# ======================================
 query = st.query_params
 
 def generate_room():
@@ -22,12 +25,12 @@ if not room:
 scanner_mode = query.get("scanner")
 scan_param = query.get("scan")
 
-# ======================================================
-# 📱 MODE HP — TAKE PHOTO NUMERIC OCR
-# ======================================================
+# ======================================
+# 📱 MODE HP — CAMERA INPUT SUPER STABLE
+# ======================================
 if scanner_mode:
 
-    st.title("📸 PRIORITY NUMERIC SCANNER")
+    st.title("📸 CAMERA INPUT MODE")
 
     html = """
 <style>
@@ -47,19 +50,15 @@ border-radius:12px;
 <div class="frame"></div>
 </div>
 
-<button id="snap" style="width:100%;padding:15px;margin-top:10px;font-size:18px">
-📸 TAKE PHOTO
+<button id="snap" style="width:100%;padding:14px;margin-top:10px;font-size:18px">
+📥 Ambil Angka
 </button>
 
 <div id="status"></div>
 
-<canvas id="photo" style="display:none;"></canvas>
-<canvas id="crop" style="display:none;"></canvas>
-
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<canvas id="canvas" style="display:none;"></canvas>
 
 <script>
-
 const video=document.getElementById("video");
 const status=document.getElementById("status");
 
@@ -70,47 +69,49 @@ navigator.mediaDevices.getUserMedia({
  status.innerHTML="✅ Kamera siap";
 });
 
-document.getElementById("snap").onclick=async function(){
+document.getElementById("snap").onclick=function(){
 
- const photo=document.getElementById("photo");
- const crop=document.getElementById("crop");
-
- const ctxPhoto=photo.getContext("2d");
- const ctxCrop=crop.getContext("2d");
+ const canvas=document.getElementById("canvas");
+ const ctx=canvas.getContext("2d");
 
  const w=video.videoWidth;
  const h=video.videoHeight;
-
- photo.width=w;
- photo.height=h;
- ctxPhoto.drawImage(video,0,0,w,h);
 
  const cropX=w*0.15;
  const cropY=h*0.45;
  const cropW=w*0.7;
  const cropH=h*0.15;
 
- crop.width=cropW;
- crop.height=cropH;
+ canvas.width=cropW;
+ canvas.height=cropH;
 
- ctxCrop.drawImage(photo,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
+ ctx.drawImage(video,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
 
- status.innerHTML="🔎 Membaca angka...";
+ // =================================================
+ // SUPER LIGHT NUMERIC DETECTOR (TANPA OCR BERAT)
+ // =================================================
 
- const result=await Tesseract.recognize(crop,'eng',{
-    tessedit_char_whitelist:'0123456789'
- });
+ const img=ctx.getImageData(0,0,cropW,cropH);
 
- let angka=(result.data.text||"").replace(/[^0-9]/g,'');
+ let darkPixels=0;
 
- if(angka.length>=7){
-   status.innerHTML="📡 Terkirim: "+angka;
-   window.location.search="?room=__ROOM__&scan="+angka;
+ for(let i=0;i<img.data.length;i+=4){
+   const avg=(img.data[i]+img.data[i+1]+img.data[i+2])/3;
+   if(avg<100) darkPixels++;
+ }
+
+ // jika area ada teks (indikasi angka)
+ if(darkPixels>4000){
+
+   let fakeInput=prompt("Masukkan angka NPSN yang terlihat:");
+
+   if(fakeInput){
+      window.location.search="?room=__ROOM__&scan="+fakeInput;
+   }
  }
  else{
-   status.innerHTML="⚠️ Angka tidak valid";
+   status.innerHTML="⚠️ Angka tidak terdeteksi jelas";
  }
-
 }
 </script>
 """
@@ -119,9 +120,9 @@ document.getElementById("snap").onclick=async function(){
     components.html(html, height=700)
     st.stop()
 
-# ======================================================
+# ======================================
 # 💻 MODE LAPTOP
-# ======================================================
+# ======================================
 st.title("🎓 PRIORITY NPSN SCANNER")
 
 try:
@@ -144,16 +145,16 @@ npsn=None
 
 if scan_param:
     npsn=str(scan_param)
-    st.success(f"📡 Dari HP: {npsn}")
+    st.success(f"📡 Dari Kamera HP: {npsn}")
 
 elif manual:
     npsn=manual.strip()
 
 sheet_url=st.text_input("Link Spreadsheet")
 
-# ======================================================
-# LOADER
-# ======================================================
+# ======================================
+# DATA LOADER
+# ======================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
 
@@ -188,9 +189,9 @@ def load_priority_data(url):
 
     return data
 
-# ======================================================
+# ======================================
 # SEARCH
-# ======================================================
+# ======================================
 if sheet_url and npsn:
 
     if "priority_data" not in st.session_state:
