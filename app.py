@@ -25,11 +25,11 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===============================
-# 📱 MODE HP — TAKE PHOTO OCR
+# 📱 HP MODE — TAKE PHOTO OCR
 # ===============================
 if scanner_mode:
 
-    st.title("📸 TAKE PHOTO PRIORITY SCANNER")
+    st.title("📸 PRIORITY TAKE PHOTO SCANNER")
 
     html = """
 <style>
@@ -126,9 +126,11 @@ qr=qrcode.make(scanner_link)
 buf=io.BytesIO()
 qr.save(buf)
 
+st.markdown("### 📱 Scan QR pakai HP untuk jadi scanner")
 st.image(buf.getvalue(),width=200)
 st.code(scanner_link)
 
+# LISTENER DATA DARI HP
 listener=f"""
 <script>
 setInterval(function(){
@@ -157,9 +159,9 @@ elif manual:
 sheet_url=st.text_input("Link Spreadsheet")
 
 # ===============================
-# LOAD DATA
+# PRIORITY LOADER
 # ===============================
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_priority_data(url):
 
     if "docs.google.com" in url:
@@ -167,22 +169,78 @@ def load_priority_data(url):
 
     excel=pd.ExcelFile(url,engine="openpyxl")
 
-    df=pd.read_excel(excel,header=0,engine="openpyxl")
-    df.columns=df.columns.str.lower()
+    PRIORITY_SHEET="PAKE DATA INI UDAH KE UPDATE!!!"
+    BACKUP_SHEET="18/2/2026"
 
-    return df
+    def read_sheet(sheet_name):
+
+        raw=pd.read_excel(
+            excel,
+            sheet_name=sheet_name,
+            header=None,
+            engine="openpyxl"
+        )
+
+        header_row=None
+
+        for i in range(min(15,len(raw))):
+            row_values = (
+                raw.iloc[i]
+                .fillna("")
+                .astype(str)
+                .str.lower()
+                .tolist()
+            )
+
+            if any("npsn" in v for v in row_values):
+                header_row=i
+                break
+
+        if header_row is not None:
+            df=raw.iloc[header_row+1:].copy()
+            df.columns=(
+                raw.iloc[header_row]
+                .astype(str)
+                .str.lower()
+                .str.strip()
+            )
+        else:
+            df=raw.copy()
+            df.columns=[f"kolom_{i}" for i in range(len(df.columns))]
+
+        df=df.loc[:,~df.columns.duplicated()]
+        df["source_sheet"]=sheet_name
+
+        return df.reset_index(drop=True)
+
+    data={}
+
+    if PRIORITY_SHEET in excel.sheet_names:
+        data["priority"]=read_sheet(PRIORITY_SHEET)
+
+    if BACKUP_SHEET in excel.sheet_names:
+        data["backup"]=read_sheet(BACKUP_SHEET)
+
+    return data
 
 # ===============================
-# SEARCH
+# SEARCH LOGIC
 # ===============================
 if sheet_url and npsn:
 
-    df=load_priority_data(sheet_url)
+    if "priority_data" not in st.session_state:
+        st.session_state.priority_data = load_priority_data(sheet_url)
 
-    if "npsn" in df.columns:
+    data=st.session_state.priority_data
 
-        hasil=df[
-            df["npsn"]
+    hasil=None
+    source=None
+
+    # PRIORITY SEARCH
+    if "priority" in data and "npsn" in data["priority"].columns:
+
+        temp=data["priority"][
+            data["priority"]["npsn"]
             .astype(str)
             .str.replace(r"\D","",regex=True)
             .str.zfill(8)
@@ -190,7 +248,37 @@ if sheet_url and npsn:
             str(npsn).zfill(8)
         ]
 
-        if len(hasil)>0:
-            st.dataframe(hasil,use_container_width=True,hide_index=True)
-        else:
-            st.warning("Data tidak ditemukan")
+        if len(temp)>0:
+            hasil=temp
+            source="priority"
+
+    # BACKUP SEARCH
+    if hasil is None and "backup" in data and "npsn" in data["backup"].columns:
+
+        temp=data["backup"][
+            data["backup"]["npsn"]
+            .astype(str)
+            .str.replace(r"\D","",regex=True)
+            .str.zfill(8)
+            ==
+            str(npsn).zfill(8)
+        ]
+
+        if len(temp)>0:
+            hasil=temp
+            source="backup"
+
+    # RESULT
+    if hasil is not None:
+
+        if source=="priority":
+            st.success("🟢 Ditemukan di sheet UPDATE")
+
+        if source=="backup":
+            st.info("🔵 Ditemukan di sheet BACKUP")
+
+        st.dataframe(hasil,use_container_width=True,hide_index=True)
+
+    else:
+        st.warning("Data tidak ditemukan")
+        
