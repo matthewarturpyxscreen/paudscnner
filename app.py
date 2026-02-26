@@ -8,9 +8,6 @@ import string
 
 st.set_page_config(layout="wide")
 
-# ======================================
-# ROOM SYSTEM
-# ======================================
 query = st.query_params
 
 def generate_room():
@@ -25,18 +22,12 @@ if not room:
 scanner_mode = query.get("scanner")
 scan_param = query.get("scan")
 
-# ======================================
-# 📱 MODE HP — TAKE PHOTO + AUTO REDIRECT
-# ======================================
+# ======================================================
+# 📱 MODE HP — TAKE PHOTO NUMERIC OCR
+# ======================================================
 if scanner_mode:
 
-    st.title("📸 PRIORITY TAKE PHOTO SCANNER")
-
-    # ambil base url
-    try:
-        base_url = str(st.context.url).split("?")[0]
-    except:
-        base_url = ""
+    st.title("📸 PRIORITY NUMERIC SCANNER")
 
     html = """
 <style>
@@ -106,19 +97,18 @@ document.getElementById("snap").onclick=async function(){
 
  status.innerHTML="🔎 Membaca angka...";
 
- const result=await Tesseract.recognize(crop,'eng');
+ const result=await Tesseract.recognize(crop,'eng',{
+    tessedit_char_whitelist:'0123456789'
+ });
 
  let angka=(result.data.text||"").replace(/[^0-9]/g,'');
 
- if(angka.length>0){
-
-   status.innerHTML="📡 Mengirim ke laptop...";
-
-   // AUTO REDIRECT KE LAPTOP
-   window.location.href="__BASE__?room=__ROOM__&scan="+angka;
+ if(angka.length>=7){
+   status.innerHTML="📡 Terkirim: "+angka;
+   window.location.search="?room=__ROOM__&scan="+angka;
  }
  else{
-   status.innerHTML="⚠️ Angka tidak terbaca";
+   status.innerHTML="⚠️ Angka tidak valid";
  }
 
 }
@@ -126,14 +116,12 @@ document.getElementById("snap").onclick=async function(){
 """
 
     html = html.replace("__ROOM__", room)
-    html = html.replace("__BASE__", base_url)
-
     components.html(html, height=700)
     st.stop()
 
-# ======================================
+# ======================================================
 # 💻 MODE LAPTOP
-# ======================================
+# ======================================================
 st.title("🎓 PRIORITY NPSN SCANNER")
 
 try:
@@ -154,7 +142,6 @@ manual=st.text_input("✏️ Input NPSN Manual")
 
 npsn=None
 
-# AUTO DARI HP
 if scan_param:
     npsn=str(scan_param)
     st.success(f"📡 Dari HP: {npsn}")
@@ -164,9 +151,9 @@ elif manual:
 
 sheet_url=st.text_input("Link Spreadsheet")
 
-# ======================================
-# PRIORITY LOADER
-# ======================================
+# ======================================================
+# LOADER
+# ======================================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
 
@@ -175,12 +162,8 @@ def load_priority_data(url):
 
     excel=pd.ExcelFile(url,engine="openpyxl")
 
-    PRIORITY_SHEET="PAKE DATA INI UDAH KE UPDATE!!!"
-    BACKUP_SHEET="18/2/2026"
-
-    def read_sheet(sheet_name):
-
-        raw=pd.read_excel(excel,sheet_name=sheet_name,header=None)
+    def read_sheet(name):
+        raw=pd.read_excel(excel,sheet_name=name,header=None)
 
         header_row=None
         for i in range(min(20,len(raw))):
@@ -191,25 +174,23 @@ def load_priority_data(url):
 
         df=raw.iloc[header_row+1:].copy()
         df.columns=pd.Series(raw.iloc[header_row]).fillna("").astype(str).str.lower()
-
         df=df.loc[:,~df.columns.duplicated()]
-        df["source_sheet"]=sheet_name
-
+        df["source_sheet"]=name
         return df.reset_index(drop=True)
 
     data={}
 
-    if PRIORITY_SHEET in excel.sheet_names:
-        data["priority"]=read_sheet(PRIORITY_SHEET)
+    if "PAKE DATA INI UDAH KE UPDATE!!!" in excel.sheet_names:
+        data["priority"]=read_sheet("PAKE DATA INI UDAH KE UPDATE!!!")
 
-    if BACKUP_SHEET in excel.sheet_names:
-        data["backup"]=read_sheet(BACKUP_SHEET)
+    if "18/2/2026" in excel.sheet_names:
+        data["backup"]=read_sheet("18/2/2026")
 
     return data
 
-# ======================================
+# ======================================================
 # SEARCH
-# ======================================
+# ======================================================
 if sheet_url and npsn:
 
     if "priority_data" not in st.session_state:
@@ -218,47 +199,18 @@ if sheet_url and npsn:
     data=st.session_state.priority_data
 
     hasil=None
-    source=None
 
-    if "priority" in data and "npsn" in data["priority"].columns:
-
-        temp=data["priority"][
-            data["priority"]["npsn"]
-            .astype(str)
-            .str.replace(r"\D","",regex=True)
-            .str.zfill(8)
-            ==
-            str(npsn).zfill(8)
+    if "priority" in data:
+        hasil=data["priority"][
+            data["priority"]["npsn"].astype(str).str.zfill(8)==str(npsn).zfill(8)
         ]
 
-        if len(temp)>0:
-            hasil=temp
-            source="priority"
-
-    if hasil is None and "backup" in data:
-
-        temp=data["backup"][
-            data["backup"]["npsn"]
-            .astype(str)
-            .str.replace(r"\D","",regex=True)
-            .str.zfill(8)
-            ==
-            str(npsn).zfill(8)
+    if (hasil is None or len(hasil)==0) and "backup" in data:
+        hasil=data["backup"][
+            data["backup"]["npsn"].astype(str).str.zfill(8)==str(npsn).zfill(8)
         ]
 
-        if len(temp)>0:
-            hasil=temp
-            source="backup"
-
-    if hasil is not None:
-
-        if source=="priority":
-            st.success("🟢 Ditemukan di UPDATE")
-
-        if source=="backup":
-            st.info("🔵 Ditemukan di BACKUP")
-
+    if hasil is not None and len(hasil)>0:
         st.dataframe(hasil,use_container_width=True,hide_index=True)
-
     else:
         st.warning("Data tidak ditemukan")
