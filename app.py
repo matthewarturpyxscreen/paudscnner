@@ -25,11 +25,11 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# 📱 MODE HP — CAMERA OCR + FRAME + ZOOM
+# 📱 MODE HP — LIVE AUTO OCR SCANNER
 # ===================================
 if scanner_mode:
 
-    st.title("📸 HP CAMERA OCR SCANNER")
+    st.title("📡 LIVE AUTO SCAN V2")
 
     html = f"""
 <style>
@@ -37,9 +37,9 @@ if scanner_mode:
 position:absolute;
 border:3px solid red;
 width:70%;
-height:80px;
+height:90px;
 left:15%;
-top:40%;
+top:45%;
 border-radius:10px;
 }}
 </style>
@@ -50,13 +50,7 @@ border-radius:10px;
 </div>
 
 <input type="range" id="zoomSlider" min="1" max="3" step="0.1" value="1" style="width:100%">
-
-<button id="snap" style="width:100%;padding:15px;margin-top:10px;font-size:18px">
-📸 TAKE PHOTO & AUTO SCAN
-</button>
-
 <div id="status" style="margin-top:10px;color:green"></div>
-
 <canvas id="canvas" style="display:none;"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -65,7 +59,9 @@ border-radius:10px;
 
 const video = document.getElementById('video');
 const statusText = document.getElementById('status');
+
 let track;
+let lastScan="";
 
 navigator.mediaDevices.getUserMedia({{
     video: {{ facingMode:"environment" }}
@@ -73,52 +69,57 @@ navigator.mediaDevices.getUserMedia({{
 .then(stream => {{
     video.srcObject = stream;
     track = stream.getVideoTracks()[0];
-    statusText.innerHTML = "✅ Kamera siap";
-}})
-.catch(err => {{
-    statusText.innerHTML = "❌ Kamera gagal: " + err;
+    statusText.innerHTML="✅ Kamera aktif — Auto scan berjalan";
 }});
 
 // ZOOM CONTROL
 document.getElementById('zoomSlider').oninput = function() {{
-    if(track) {{
-        const capabilities = track.getCapabilities();
-        if(capabilities.zoom) {{
-            track.applyConstraints({{ advanced: [{{ zoom: this.value }}] }});
+    if(track){{
+        const cap = track.getCapabilities();
+        if(cap.zoom){{
+            track.applyConstraints({{advanced:[{{zoom:this.value}}]}});
         }}
     }}
 }}
 
-document.getElementById('snap').onclick = async function() {{
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
 
-    if(video.videoWidth === 0){{
-        statusText.innerHTML = "⏳ Tunggu kamera siap...";
-        return;
-    }}
+// AUTO OCR LOOP
+async function autoScan(){{
 
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    if(video.videoWidth===0){{ setTimeout(autoScan,1500); return; }}
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    ctx.drawImage(video,0,0);
+    // ambil area tengah saja (frame merah)
+    const w = video.videoWidth;
+    const h = video.videoHeight;
 
-    statusText.innerHTML = "🔎 Membaca angka...";
+    const cropX = w*0.15;
+    const cropY = h*0.45;
+    const cropW = w*0.7;
+    const cropH = 90;
+
+    ctx.drawImage(video,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
 
     const result = await Tesseract.recognize(canvas,'eng');
 
-    let text = result.data.text || "";
-    let angka = text.replace(/[^0-9]/g,'');
+    let angka = (result.data.text||"").replace(/[^0-9]/g,'');
 
-    if(angka.length>0){{
+    if(angka.length>5 && angka!==lastScan){{
+        lastScan=angka;
+        statusText.innerHTML="📡 Angka terdeteksi: "+angka;
         localStorage.setItem("ROOM_{room}", angka);
-        statusText.innerHTML = "✅ Angka: "+angka+" (mengirim...)";
-        setTimeout(()=>{{ window.location.reload(); }},500);
-    }}else{{
-        statusText.innerHTML = "⚠️ Angka tidak terbaca";
+        setTimeout(()=>{{ window.location.reload(); }},400);
+        return;
     }}
+
+    setTimeout(autoScan,2000);
 }}
+
+setTimeout(autoScan,2000);
 
 </script>
 """
@@ -129,7 +130,7 @@ document.getElementById('snap').onclick = async function() {{
 # ===================================
 # 💻 MODE LAPTOP
 # ===================================
-st.title("🎮 CAMERA OCR ROOM SCANNER")
+st.title("🎮 LIVE AUTO SCAN V2 — ROOM MODE")
 
 try:
     base_url = str(st.context.url).split("?")[0]
@@ -142,6 +143,7 @@ qr = qrcode.make(scanner_link)
 buf = io.BytesIO()
 qr.save(buf)
 
+st.markdown("### 📱 Scan QR pakai HP untuk jadi kamera scanner")
 st.image(buf.getvalue(), width=220)
 st.code(scanner_link)
 
@@ -167,14 +169,14 @@ npsn=None
 
 if scan_value:
     npsn=str(scan_value)
-    st.success(f"📡 NPSN dari HP: {npsn}")
+    st.success(f"📡 AUTO SCAN: {npsn}")
 elif npsn_manual:
     npsn=npsn_manual
 
 sheet_url = st.text_input("Masukkan Link Spreadsheet")
 
 # ===================================
-# PRIORITY LOADER (FIX ERROR)
+# PRIORITY LOADER (FIX TYPE ERROR)
 # ===================================
 @st.cache_data(show_spinner=False)
 def load_priority_data(url):
@@ -230,21 +232,14 @@ if sheet_url and npsn:
     data = st.session_state.priority_data
 
     hasil=None
-    source=None
 
     if "priority" in data and "npsn" in data["priority"].columns:
-        temp=data["priority"][data["priority"]["npsn"].astype(str)==str(npsn)]
-        if len(temp)>0:
-            hasil=temp
-            source="priority"
+        hasil=data["priority"][data["priority"]["npsn"].astype(str)==str(npsn)]
 
-    if hasil is None and "backup" in data and "npsn" in data["backup"].columns:
-        temp=data["backup"][data["backup"]["npsn"].astype(str)==str(npsn)]
-        if len(temp)>0:
-            hasil=temp
-            source="backup"
+    if (hasil is None or len(hasil)==0) and "backup" in data:
+        hasil=data["backup"][data["backup"]["npsn"].astype(str)==str(npsn)]
 
-    if hasil is not None:
+    if hasil is not None and len(hasil)>0:
         st.dataframe(hasil,use_container_width=True,hide_index=True)
     else:
         st.warning("Data tidak ditemukan")
