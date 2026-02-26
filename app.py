@@ -12,7 +12,7 @@ import string
 st.set_page_config(layout="wide")
 
 # ===================================
-# BUAT ROOM ID UNIK
+# ROOM SYSTEM
 # ===================================
 query = st.query_params
 
@@ -28,67 +28,76 @@ if not room:
 scanner_mode = query.get("scanner")
 
 # ===================================
-# MODE HP (SCANNER)
+# 📱 MODE HP — TAKE PHOTO OCR ANGKA
 # ===================================
 if scanner_mode:
 
-    st.title("📸 HP Scanner Mode")
+    st.title("📸 MODE HP — FOTO & AUTO DETEKSI ANGKA")
 
-    scanner_html = f"""
-    <div id="reader" style="width:100%"></div>
+    camera_html = f"""
+    <video id="video" autoplay playsinline style="width:100%"></video>
+    <button onclick="takePhoto()">📸 Ambil Foto</button>
+    <canvas id="canvas" style="display:none"></canvas>
 
-    <input id="manualInput"
-    placeholder="Jika barcode gagal, ketik angka NPSN"
-    style="width:100%;padding:12px;margin-top:10px;font-size:18px"/>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 
-    <button onclick="sendManual()">Kirim Angka</button>
+    const video = document.getElementById('video');
 
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    navigator.mediaDevices.getUserMedia({{video:{{facingMode:"environment"}}}})
+    .then(stream=>{{ video.srcObject = stream; }});
 
-    <script>
     function kirim(val){{
         const angka = val.replace(/[^0-9]/g,'');
-        localStorage.setItem("ROOM_{room}", angka);
+        if(angka.length>0){{
+            localStorage.setItem("ROOM_{room}", angka);
+        }}
     }}
 
-    function sendManual(){{
-        const val = document.getElementById("manualInput").value;
-        kirim(val);
-    }}
+    function takePhoto(){{
+        const canvas = document.getElementById('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-    function onScanSuccess(decodedText){{
-        kirim(decodedText);
-    }}
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video,0,0);
 
-    var scanner = new Html5QrcodeScanner("reader", {{fps:10,qrbox:250}});
-    scanner.render(onScanSuccess);
+        Tesseract.recognize(canvas,'eng').then(({{
+            data:{{text}}
+        }})=>{{
+            kirim(text);
+        }});
+    }}
     </script>
     """
 
-    components.html(scanner_html, height=500)
+    components.html(camera_html, height=500)
     st.stop()
 
 # ===================================
-# MODE LAPTOP (VIEWER)
+# 💻 MODE LAPTOP
 # ===================================
-st.title("🎮 QR ROOM SCANNER ULTRA")
+st.title("🎮 TAKE PHOTO NPSN SCANNER ULTRA")
 
 # ===================================
-# TAMPILKAN QR UNTUK HP
+# QR UNTUK HP
 # ===================================
-base_url = str(st.context.url).split("?")[0]
+try:
+    base_url = str(st.context.url).split("?")[0]
+except:
+    base_url = ""
+
 scanner_link = f"{base_url}?scanner={room}"
 
 qr = qrcode.make(scanner_link)
 buf = io.BytesIO()
 qr.save(buf)
 
-st.markdown("### 📱 Scan QR ini pakai HP untuk jadi scanner")
+st.markdown("### 📱 Scan QR ini pakai HP")
 st.image(buf.getvalue(), width=220)
 st.code(scanner_link)
 
 # ===================================
-# LISTENER REALTIME DARI HP
+# LISTENER REALTIME
 # ===================================
 listener_html = f"""
 <script>
@@ -115,13 +124,13 @@ npsn = None
 
 if scan_value:
     npsn = str(scan_value)
-    st.success(f"📡 Scan dari HP: {npsn}")
+    st.success(f"📡 NPSN dari HP (OCR): {npsn}")
 
 elif npsn_manual:
     npsn = npsn_manual
 
 # ===================================
-# PRIORITY SEARCH ENGINE (SAMA SEPERTI PUNYA KAMU)
+# PRIORITY SEARCH ENGINE
 # ===================================
 sheet_url = st.text_input("Masukkan Link Spreadsheet")
 
