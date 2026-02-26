@@ -1,38 +1,15 @@
 import streamlit as st
 import pandas as pd
 import streamlit.components.v1 as components
-import qrcode
-import io
-import random
-import string
 
 st.set_page_config(layout="wide")
 
-# ======================================
-# ROOM SYSTEM
-# ======================================
-query = st.query_params
+st.title("🎓 NPSN Scanner — Laptop Mode (Super Stabil)")
 
-def generate_room():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-
-room = query.get("room")
-
-if not room:
-    room = generate_room()
-    st.query_params["room"] = room
-
-scanner_mode = query.get("scanner")
-scan_param = query.get("scan")
-
-# ======================================
-# 📱 MODE HP — CAMERA INPUT SUPER STABLE
-# ======================================
-if scanner_mode:
-
-    st.title("📸 CAMERA INPUT MODE")
-
-    html = """
+# =========================
+# CAMERA SCANNER DI LAPTOP
+# =========================
+html = """
 <style>
 .frame{
 position:absolute;
@@ -50,118 +27,48 @@ border-radius:12px;
 <div class="frame"></div>
 </div>
 
-<button id="snap" style="width:100%;padding:14px;margin-top:10px;font-size:18px">
-📥 Ambil Angka
-</button>
-
-<div id="status"></div>
-
-<canvas id="canvas" style="display:none;"></canvas>
+<input id="hiddenInput" />
 
 <script>
 const video=document.getElementById("video");
-const status=document.getElementById("status");
 
 navigator.mediaDevices.getUserMedia({
- video:{facingMode:"environment"}
+ video:true
 }).then(stream=>{
  video.srcObject=stream;
- status.innerHTML="✅ Kamera siap";
 });
 
-document.getElementById("snap").onclick=function(){
-
- const canvas=document.getElementById("canvas");
- const ctx=canvas.getContext("2d");
-
- const w=video.videoWidth;
- const h=video.videoHeight;
-
- const cropX=w*0.15;
- const cropY=h*0.45;
- const cropW=w*0.7;
- const cropH=h*0.15;
-
- canvas.width=cropW;
- canvas.height=cropH;
-
- ctx.drawImage(video,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
-
- // =================================================
- // SUPER LIGHT NUMERIC DETECTOR (TANPA OCR BERAT)
- // =================================================
-
- const img=ctx.getImageData(0,0,cropW,cropH);
-
- let darkPixels=0;
-
- for(let i=0;i<img.data.length;i+=4){
-   const avg=(img.data[i]+img.data[i+1]+img.data[i+2])/3;
-   if(avg<100) darkPixels++;
- }
-
- // jika area ada teks (indikasi angka)
- if(darkPixels>4000){
-
-   let fakeInput=prompt("Masukkan angka NPSN yang terlihat:");
-
-   if(fakeInput){
-      window.location.search="?room=__ROOM__&scan="+fakeInput;
-   }
- }
- else{
-   status.innerHTML="⚠️ Angka tidak terdeteksi jelas";
- }
-}
+document.getElementById("hiddenInput").addEventListener("change",function(){
+ window.parent.postMessage({
+   type:"streamlit:setComponentValue",
+   value:this.value
+ },"*");
+});
 </script>
 """
 
-    html = html.replace("__ROOM__", room)
-    components.html(html, height=700)
-    st.stop()
+scan_value = components.html(html, height=420)
 
-# ======================================
-# 💻 MODE LAPTOP
-# ======================================
-st.title("🎓 PRIORITY NPSN SCANNER")
-
-try:
-    base_url=str(st.context.url).split("?")[0]
-except:
-    base_url=""
-
-scanner_link=f"{base_url}?scanner={room}"
-
-qr=qrcode.make(scanner_link)
-buf=io.BytesIO()
-qr.save(buf)
-
-st.image(buf.getvalue(),width=200)
-st.code(scanner_link)
-
-manual=st.text_input("✏️ Input NPSN Manual")
+manual = st.text_input("Input NPSN")
 
 npsn=None
-
-if scan_param:
-    npsn=str(scan_param)
-    st.success(f"📡 Dari Kamera HP: {npsn}")
-
+if isinstance(scan_value,str):
+    npsn=scan_value
 elif manual:
-    npsn=manual.strip()
+    npsn=manual
 
-sheet_url=st.text_input("Link Spreadsheet")
+sheet_url = st.text_input("Link Spreadsheet")
 
-# ======================================
+# =========================
 # DATA LOADER
-# ======================================
-@st.cache_data(show_spinner=False)
-def load_priority_data(url):
+# =========================
+@st.cache_data
+def load_data(url):
 
     if "docs.google.com" in url:
         url=url.split("/edit")[0]+"/export?format=xlsx"
 
-    excel=pd.ExcelFile(url,engine="openpyxl")
+    excel=pd.ExcelFile(url)
 
     def read_sheet(name):
         raw=pd.read_excel(excel,sheet_name=name,header=None)
@@ -176,7 +83,6 @@ def load_priority_data(url):
         df=raw.iloc[header_row+1:].copy()
         df.columns=pd.Series(raw.iloc[header_row]).fillna("").astype(str).str.lower()
         df=df.loc[:,~df.columns.duplicated()]
-        df["source_sheet"]=name
         return df.reset_index(drop=True)
 
     data={}
@@ -189,15 +95,12 @@ def load_priority_data(url):
 
     return data
 
-# ======================================
+# =========================
 # SEARCH
-# ======================================
+# =========================
 if sheet_url and npsn:
 
-    if "priority_data" not in st.session_state:
-        st.session_state.priority_data=load_priority_data(sheet_url)
-
-    data=st.session_state.priority_data
+    data=load_data(sheet_url)
 
     hasil=None
 
